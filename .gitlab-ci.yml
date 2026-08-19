@@ -1,0 +1,47 @@
+stages:
+  - deploy
+
+.deploy_template: &deploy_definition
+  stage: deploy
+  before_script:
+    - 'which ssh-agent || ( apt-get update -y && apt-get install -y openssh-client )'
+    - eval $(ssh-agent -s)
+    - echo "=== Debugging SSH key ==="
+    - echo "=== Attempting to add key ==="
+    - echo "$DEPLOY_SSH_KEY" | tr -d '\r' | ssh-add -
+  script:
+    - echo "Deploying $CI_COMMIT_REF_NAME branch to $DEPLOY_HOST..."
+    - ssh -o StrictHostKeyChecking=no $DEPLOY_USER@$DEPLOY_HOST "bash -lc '
+        cd $DEPLOY_PATH &&
+        git fetch --all &&
+        git reset --hard origin/$CI_COMMIT_REF_NAME &&
+        npm install &&
+        npm run build &&
+        pm2 restart cnsquad'"
+
+deploy_staging:
+  <<: *deploy_definition
+  only:
+    - staging
+  environment:
+    name: staging
+  variables:
+    DEPLOY_HOST: $STAGING_HOST
+    DEPLOY_PATH: $STAGING_PATH
+    DEPLOY_SSH_KEY: $STAGING_SSH_KEY
+    DEPLOY_USER: $STAGING_USER
+  when: on_success
+
+deploy_production:
+  <<: *deploy_definition
+  only:
+    - main
+  environment:
+    name: production
+  variables:
+    DEPLOY_HOST: $PROD_HOST
+    DEPLOY_PATH: $PROD_PATH
+    DEPLOY_SSH_KEY: $PROD_SSH_KEY
+    DEPLOY_USER: $PROD_USER
+  when: manual
+  allow_failure: false
