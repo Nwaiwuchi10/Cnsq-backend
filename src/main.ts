@@ -42,6 +42,7 @@ async function bootstrap() {
   // Explicit CORS setup
   app.enableCors({
     origin: [
+      'https://cnsq-frontend.vercel.app',
       'https://cn-squad.vercel.app',
       'https://cnsquad-admin-frontend.vercel.app',
       'https://cnsquad-frontend.vercel.app',
@@ -74,7 +75,7 @@ async function bootstrap() {
     .setVersion('1.0')
     .addBearerAuth()
     .build();
-  
+
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api/docs', app, document);
   fs.writeFileSync('./swagger.json', JSON.stringify(document, null, 2));
