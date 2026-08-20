@@ -145,9 +145,9 @@ export class CallsService {
     // Determine how many participants are still JOINED
     const remainingCount = call.participants.filter(p => p.status === ParticipantStatus.JOINED).length;
 
-    // If it's a DM call, OR if it's a group call with < 2 participants remaining, end it entirely.
-    // (A group call ends if 0 or 1 active participants remain).
-    if (call.scope === CallScope.DM || remainingCount < 2) {
+    // If it's a DM call, OR if it's a group call with 0 participants remaining, end it entirely.
+    // (A group call ends if 0 active participants remain).
+    if (call.scope === CallScope.DM || remainingCount === 0) {
       call.status = CallStatus.ENDED;
       call.endedAt = now;
 
@@ -213,6 +213,35 @@ export class CallsService {
     call.participants.push(savedParticipant);
 
     return { call, newParticipant: savedParticipant };
+  }
+
+  /**
+   * Remove (kick) a participant from an active group call
+   * Only the initiator can remove others
+   */
+  async removeParticipantFromCall(callId: string, initiatorId: number, targetUserId: number): Promise<{ call: Call }> {
+    const call = await this.callRepo.findOne({
+      where: { id: callId },
+      relations: ['initiator', 'participants', 'participants.user'],
+    });
+    if (!call) throw new NotFoundException('Call not found');
+
+    if (call.initiator.id !== initiatorId) {
+      throw new ForbiddenException('Only the initiator can remove participants from the call');
+    }
+
+    if (call.scope !== CallScope.GROUP) {
+      throw new BadRequestException('Can only remove participants from group calls');
+    }
+
+    const participant = call.participants.find(p => p.user.id === targetUserId && p.status === ParticipantStatus.JOINED);
+    if (!participant) throw new NotFoundException('Participant not found in active call');
+
+    participant.status = ParticipantStatus.LEFT;
+    participant.leftAt = new Date();
+    await this.participantRepo.save(participant);
+
+    return { call };
   }
 
   /**
